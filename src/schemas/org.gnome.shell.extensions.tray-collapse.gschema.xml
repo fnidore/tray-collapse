@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.tray-collapse"
+          path="/org/gnome/shell/extensions/tray-collapse/">
+
+    <key name="default-collapse" type="b">
+      <default>false</default>
+      <summary>新图标默认收进抽屉</summary>
+      <description>对于尚未在设置里指定过的图标：true=默认收进抽屉，false=默认留在顶栏。</description>
+    </key>
+
+    <key name="pinned-ids" type="as">
+      <default>[]</default>
+      <summary>强制常驻顶栏的图标 id</summary>
+      <description>这些 AppIndicator id 永远留在顶栏，不收进抽屉。</description>
+    </key>
+
+    <key name="collapsed-ids" type="as">
+      <default>[]</default>
+      <summary>强制收进抽屉的图标 id</summary>
+      <description>这些 AppIndicator id 永远收进抽屉。</description>
+    </key>
+
+    <key name="known-indicators" type="s">
+      <default>'[]'</default>
+      <summary>已知图标记录 (JSON)</summary>
+      <description>由扩展进程写入：见过的所有图标 [{id,title}]，供设置界面渲染列表（跨进程桥接）。</description>
+    </key>
+
+  </schema>
+</schemalist>
