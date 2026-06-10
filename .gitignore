@@ -1,6 +1,13 @@
 # schema 编译产物（由 install.sh / make schemas 生成）
 src/schemas/gschemas.compiled
 
+# 打包产物
+dist/
+build/
+
+# 本地 AI 助手配置
+.claude/
+
 # 编辑器/系统杂物
 *.swp
 *~
