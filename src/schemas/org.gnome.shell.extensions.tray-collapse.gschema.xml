@@ -27,5 +27,19 @@
       <description>由扩展进程写入：见过的所有图标 [{id,title}]，供设置界面渲染列表（跨进程桥接）。</description>
     </key>
 
+    <key name="drawer-spacing" type="i">
+      <default>12</default>
+      <range min="0" max="40"/>
+      <summary>抽屉里图标的间距 (px)</summary>
+      <description>⋯ 展开后，抽屉内各图标之间的水平间距，单位像素。</description>
+    </key>
+
+    <key name="panel-hpadding" type="i">
+      <default>12</default>
+      <range min="0" max="24"/>
+      <summary>顶栏托盘图标的水平内边距 (px)</summary>
+      <description>覆盖主题给每个托盘图标按钮的左右内边距（Yaru 默认 12）。调小即收紧顶栏图标间距；只影响 AppIndicator 托盘图标，不动时钟等系统按钮。</description>
+    </key>
+
   </schema>
 </schemalist>

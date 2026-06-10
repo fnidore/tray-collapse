@@ -22,23 +22,32 @@ const ExtensionUtils = imports.misc.extensionUtils;
 
 const APPINDICATOR_PREFIX = 'appindicator-';
 
+// legacy 托盘图标的 id 形如 legacy:<窗口类>:<进程号>（appindicator 的
+// indicatorStatusIcon.js 生成），进程号每次重启都变，砍掉它才是稳定匹配键
+function canonicalId(id) {
+    const m = /^legacy:(.+):\d+$/.exec(String(id));
+    return m ? `legacy:${m[1]}` : String(id);
+}
+
 // 稳定标识：优先 AppIndicator 上报的 id，其次 title，最后 uniqueId 兜底
 function indicatorId(indicator) {
     const ind = indicator._indicator;
     if (ind) {
         if (ind.id)
-            return String(ind.id);
+            return canonicalId(ind.id);
         if (ind.title)
             return String(ind.title);
     }
-    return String(indicator.uniqueId || '');
+    return canonicalId(indicator.uniqueId || '');
 }
 
 function indicatorTitle(indicator) {
     const ind = indicator._indicator;
     if (ind && ind.title)
         return String(ind.title);
-    return indicatorId(indicator);
+    const id = indicatorId(indicator);
+    // legacy 图标没有 title，用窗口类当标题（legacy:fcitx → fcitx）
+    return id.startsWith('legacy:') ? id.slice('legacy:'.length) : id;
 }
 
 const TrayCollapseButton = GObject.registerClass(
@@ -62,6 +71,8 @@ class TrayCollapseButton extends PanelMenu.Button {
         });
 
         this._moved = new Map();       // container -> destroy 信号 id
+        this._spacers = new Map();     // container -> spacer actor
+        this._padded = new Set();      // 被覆盖过内边距的 indicator（禁用时还原）
         this._timeouts = new Set();
         this._suppressAdded = false;   // 搬图标回顶栏时抑制自身 actor-added 回环
 
@@ -69,7 +80,13 @@ class TrayCollapseButton extends PanelMenu.Button {
             this._settings.connect('changed::collapsed-ids', () => this._apply()),
             this._settings.connect('changed::pinned-ids', () => this._apply()),
             this._settings.connect('changed::default-collapse', () => this._apply()),
+            this._settings.connect('changed::drawer-spacing',
+                () => this._applyDrawerSpacing()),
+            this._settings.connect('changed::panel-hpadding',
+                () => this._applyPanelPadding()),
         ];
+
+        this._applyDrawerSpacing();
 
         // 顶栏右盒新增子节点（新程序弹托盘图标）时整体重扫
         this._addedId = Main.panel._rightBox.connect('actor-added', () => {
@@ -89,6 +106,25 @@ class TrayCollapseButton extends PanelMenu.Button {
 
     get drawerBox() {
         return this._drawerBox;
+    }
+
+    _applyDrawerSpacing() {
+        const px = this._settings.get_int('drawer-spacing');
+        for (const spacer of this._spacers.values())
+            spacer.set_width(px);
+    }
+
+    // 顶栏图标的「宽间距」来自主题：每个 panel-button 左右各 12px 内边距
+    // （Yaru 的 -natural-hpadding），与 appindicator 的 icon-spacing 无关
+    // （Ubuntu 22.04 打包的旧版 appindicator 没实现该键）。
+    // 这里用内联样式逐个覆盖托盘图标按钮的内边距；禁用时 set_style(null) 还原。
+    _applyPanelPadding() {
+        const px = this._settings.get_int('panel-hpadding');
+        for (const it of this._appindicators()) {
+            it.indicator.set_style(
+                `-natural-hpadding: ${px}px; -minimum-hpadding: ${px}px;`);
+            this._padded.add(it.indicator);
+        }
     }
 
     _toggle() {
@@ -136,9 +172,18 @@ class TrayCollapseButton extends PanelMenu.Button {
             else
                 this._moveOut(it.container);
         }
+        this._applyPanelPadding();
     }
 
-    // 把见过的图标写进 known-indicators(JSON)，供设置界面读取
+    // 把见过的图标写进 known-indicators(JSON)，供设置界面读取。
+    // 顺带做去重：
+    //   1) 存量清洗：旧版本记录过带 PID 的 legacy id（legacy:fcitx:4315），
+    //      规范化后合并重复项、重算标题；
+    //   2) 同名清扫：个别应用（如 com.follow.clash）违反 SNI 规范，每次启动
+    //      乱报随机 id 但 title 稳定——同 title 且「不在线」的旧条目视为
+    //      同一应用留下的旧身份，删除并把收纳设置迁给当前 id；
+    //   3) peers 保护：同 title 的图标若「同时在线」过（如两个「更新通知」
+    //      其实是不同应用），互记为 peers 并持久化，永不合并。
     _recordKnown(items) {
         let known = [];
         try {
@@ -146,20 +191,108 @@ class TrayCollapseButton extends PanelMenu.Button {
         } catch (e) {
             known = [];
         }
-        const map = new Map(known.map(k => [k.id, k.title]));
         let changed = false;
+
+        // 存量清洗：id 规范化合并 legacy 重复项，丑标题按新 id 重算
+        const map = new Map();   // id -> { title, peers: Set }
+        for (const k of known) {
+            const id = canonicalId(k.id);
+            let title = k.title;
+            if (id.startsWith('legacy:') && String(title).startsWith('legacy:'))
+                title = id.slice('legacy:'.length);
+            if (id !== k.id || title !== k.title)
+                changed = true;
+            if (!map.has(id))
+                map.set(id, { title, peers: new Set(k.peers || []) });
+        }
+        this._canonicalizeList('collapsed-ids');
+        this._canonicalizeList('pinned-ids');
+
+        const liveIds = new Set(items.map(it => it.id).filter(Boolean));
+
+        // 同时在线的同名图标 → 真·不同应用，互记 peers
+        const byTitle = new Map();
         for (const it of items) {
             if (!it.id)
                 continue;
-            if (map.get(it.id) !== it.title) {
-                map.set(it.id, it.title);
+            if (!byTitle.has(it.title))
+                byTitle.set(it.title, []);
+            byTitle.get(it.title).push(it.id);
+        }
+
+        for (const it of items) {
+            if (!it.id)
+                continue;
+            if (!map.has(it.id)) {
+                map.set(it.id, { title: it.title, peers: new Set() });
+                changed = true;
+            }
+            const entry = map.get(it.id);
+            if (entry.title !== it.title) {
+                entry.title = it.title;
+                changed = true;
+            }
+            for (const peer of byTitle.get(it.title)) {
+                if (peer !== it.id && !entry.peers.has(peer)) {
+                    entry.peers.add(peer);
+                    changed = true;
+                }
+            }
+
+            // 同名清扫：不在线、又不是 peers 的同 title 旧条目 → 旧身份，合并掉。
+            // 当前 id 已有明确设置则只清不迁，避免旧设置覆盖用户现在的选择。
+            const hasExplicit =
+                this._settings.get_strv('collapsed-ids').includes(it.id) ||
+                this._settings.get_strv('pinned-ids').includes(it.id);
+            for (const [oldId, old] of [...map]) {
+                if (oldId === it.id || old.title !== it.title)
+                    continue;
+                if (liveIds.has(oldId) || entry.peers.has(oldId) ||
+                    old.peers.has(it.id))
+                    continue;
+                map.delete(oldId);
+                if (hasExplicit) {
+                    this._removeFromList('collapsed-ids', oldId);
+                    this._removeFromList('pinned-ids', oldId);
+                } else {
+                    this._renameInList('collapsed-ids', oldId, it.id);
+                    this._renameInList('pinned-ids', oldId, it.id);
+                }
                 changed = true;
             }
         }
+
         if (changed) {
-            const arr = [...map].map(([id, title]) => ({ id, title }));
+            const arr = [...map].map(([id, v]) =>
+                ({ id, title: v.title, peers: [...v.peers] }));
             this._settings.set_string('known-indicators', JSON.stringify(arr));
         }
+    }
+
+    // 列表里的 id 全部规范化并去重（存量数据清洗，无变化则不写回）
+    _canonicalizeList(key) {
+        const arr = this._settings.get_strv(key);
+        const out = [...new Set(arr.map(canonicalId))];
+        if (out.length !== arr.length || out.some((v, i) => v !== arr[i]))
+            this._settings.set_strv(key, out);
+    }
+
+    // 应用乱报随机 id 时迁移设置：把列表里的 oldId 换成 newId（不重复添加）
+    _renameInList(key, oldId, newId) {
+        const arr = this._settings.get_strv(key);
+        if (!arr.includes(oldId))
+            return;
+        const out = arr.filter(x => x !== oldId);
+        if (!out.includes(newId))
+            out.push(newId);
+        this._settings.set_strv(key, out);
+    }
+
+    // 清掉列表里某个失效 id（不迁移）
+    _removeFromList(key, id) {
+        const arr = this._settings.get_strv(key);
+        if (arr.includes(id))
+            this._settings.set_strv(key, arr.filter(x => x !== id));
     }
 
     _scheduleRescan(ms) {
@@ -178,6 +311,10 @@ class TrayCollapseButton extends PanelMenu.Button {
         if (parent)
             parent.remove_child(container);
         this._drawerBox.add_child(container);
+        const px = this._settings.get_int('drawer-spacing');
+        const spacer = new St.Bin({ width: px });
+        this._drawerBox.add_child(spacer);
+        this._spacers.set(container, spacer);
         const destroyId = container.connect('destroy',
             () => this._moved.delete(container));
         this._moved.set(container, destroyId);
@@ -200,6 +337,11 @@ class TrayCollapseButton extends PanelMenu.Button {
         if (destroyId)
             container.disconnect(destroyId);
         this._moved.delete(container);
+        const spacer = this._spacers.get(container);
+        if (spacer) {
+            spacer.destroy();
+            this._spacers.delete(container);
+        }
         if (this._drawerBox.contains(container))
             this._drawerBox.remove_child(container);
     }
@@ -233,6 +375,16 @@ class TrayCollapseButton extends PanelMenu.Button {
         this._timeouts.clear();
 
         this._restoreAll();
+
+        // 还原被覆盖的顶栏图标内边距，交还给主题
+        for (const indicator of this._padded) {
+            try {
+                indicator.set_style(null);
+            } catch (e) {
+                // indicator 可能已被销毁，忽略
+            }
+        }
+        this._padded.clear();
 
         // 移除抽屉盒子
         if (this._drawerBox) {

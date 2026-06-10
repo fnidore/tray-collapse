@@ -8,6 +8,8 @@
 - 收纳的图标始终是面板**原生按钮**，展开后点击行为完全正常（菜单照常弹出）
 - 设置界面里逐个图标开关：**开 = 收纳，关 = 留在顶栏**
 - 新出现的图标按「默认行为」自动处理（默认：留在顶栏）
+- **间距可调**：抽屉内图标间距、顶栏图标内边距（覆盖主题的 `-natural-hpadding`，appindicator 自带的 `icon-spacing` 在 Ubuntu 22.04 打包的旧版里并未实现）
+- **自动去重**：legacy 图标（id 带进程号，如 `legacy:fcitx:4315`）规范化合并；乱报随机 id 的应用（如部分代理客户端）按 title 识别为同一应用并继承设置
 - 禁用 / 卸载会把图标**原样还原**回顶栏，无残留
 
 > 为什么不用弹出菜单：被收纳的图标本身是面板按钮，若塞进弹出菜单，点击它会先关闭外层菜单导致其自身菜单弹不出。故抽屉做成顶栏内的盒子，靠显隐折叠。
@@ -31,12 +33,37 @@ tray-collapse/
 
 ## 安装
 
+### 方式一：Release zip（推荐）
+
+从 [Releases](https://github.com/fnidore/tray-collapse/releases) 下载 zip：
+
 ```bash
-./install.sh
+gnome-extensions install --force tray-collapse@fnidore.top.shell-extension.zip
+# 然后（X11）：Alt+F2 → r → 回车 重启 Shell
+gnome-extensions enable tray-collapse@fnidore.top
+```
+
+### 方式二：deb 包（Ubuntu）
+
+从 Releases 下载 deb（装到系统目录，所有用户可用）：
+
+```bash
+sudo apt install ./gnome-shell-extension-tray-collapse_1_all.deb
+# 重启 Shell 后启用
+gnome-extensions enable tray-collapse@fnidore.top
+```
+
+### 方式三：源码安装（开发）
+
+```bash
+git clone https://github.com/fnidore/tray-collapse.git && cd tray-collapse
+./install.sh        # 编译 schema + 软链到扩展目录，改代码重启 Shell 即生效
 # 然后（X11）：Alt+F2 → r → 回车 重启 Shell
 gnome-extensions enable tray-collapse@fnidore.top
 gnome-extensions prefs  tray-collapse@fnidore.top   # 打开设置
 ```
+
+依赖：GNOME Shell 42 + [AppIndicator 扩展](https://github.com/ubuntu/gnome-shell-extension-appindicator)（Ubuntu 22.04 预装）。
 
 ## 工作原理
 
@@ -56,6 +83,8 @@ appindicator 扩展把每个图标注册为 `Main.panel.statusArea['appindicator
 | `pinned-ids` | string[] | 强制常驻顶栏的图标 id |
 | `collapsed-ids` | string[] | 强制收进抽屉的图标 id |
 | `known-indicators` | string(JSON) | 扩展记录的已知图标 `[{id,title}]` |
+| `drawer-spacing` | int (0-40) | 抽屉内图标间距 px（默认 12） |
+| `panel-hpadding` | int (0-24) | 顶栏托盘图标左右内边距 px（默认 12 = Yaru 主题原值，调小即收紧） |
 
 判定优先级：`collapsed-ids` > `pinned-ids` > `default-collapse`。
 
@@ -69,4 +98,23 @@ appindicator 扩展把每个图标注册为 `Main.panel.statusArea['appindicator
 make logs      # 实时看本扩展日志
 make prefs     # 打开设置
 make uninstall # 卸载
+make pack      # 打包 Release zip（dist/）
+make deb       # 打包 deb（dist/）
+make clean     # 清理打包产物
 ```
+
+## 发布
+
+推一个 `v*` 标签即触发 GitHub Actions 自动打包 zip + deb 并创建 Release：
+
+```bash
+git tag v1 && git push origin v1
+```
+
+上架 [extensions.gnome.org](https://extensions.gnome.org)：`make pack` 后到
+[上传页](https://extensions.gnome.org/upload/) 提交 zip，等待人工审核。
+每次重新上传需把 `metadata.json` 的 `version` 加一。
+
+## 许可证
+
+[GPL-2.0-or-later](LICENSE)（GNOME Shell 扩展惯例）。

@@ -1,5 +1,4 @@
 /* 抽屉里图标之间留点间距，别挤成一坨 */
 .tray-collapse-drawer {
-    spacing: 12px;
     padding: 4px 10px;
 }

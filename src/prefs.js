@@ -7,6 +7,23 @@ const ExtensionUtils = imports.misc.extensionUtils;
 
 function init() {}
 
+// 造一个「标题 + 数字微调框」行；spin 为 int，绑定到 settings 的某个 int key。
+function makeSpinRow(settings, key, title, subtitle, lower, upper) {
+    const row = new Adw.ActionRow({ title, subtitle });
+    const spin = new Gtk.SpinButton({
+        adjustment: new Gtk.Adjustment({
+            lower, upper, step_increment: 1, page_increment: 4,
+        }),
+        valign: Gtk.Align.CENTER,
+    });
+    spin.set_value(settings.get_int(key));
+    spin.connect('value-changed',
+        () => settings.set_int(key, spin.get_value_as_int()));
+    row.add_suffix(spin);
+    row.activatable_widget = spin;
+    return row;
+}
+
 // 某 id 当前是否处于「收纳」状态：collapsed 优先 > pinned > 默认值
 function isCollapsed(settings, id) {
     if (settings.get_strv('collapsed-ids').includes(id))
@@ -50,6 +67,20 @@ function fillPreferencesWindow(window) {
     defaultRow.add_suffix(defaultSwitch);
     defaultRow.activatable_widget = defaultSwitch;
     general.add(defaultRow);
+
+    // —— 间距 ——
+    const spacing = new Adw.PreferencesGroup({
+        title: '间距',
+        description: '调整托盘图标之间的水平距离（单位像素）',
+    });
+    page.add(spacing);
+
+    spacing.add(makeSpinRow(settings, 'drawer-spacing',
+        '抽屉图标间距', '⋯ 展开后，抽屉里各图标之间的距离', 0, 40));
+
+    spacing.add(makeSpinRow(settings, 'panel-hpadding',
+        '顶栏图标内边距', '每个托盘图标左右的留白，调小即收紧间距（主题默认 12）',
+        0, 24));
 
     // —— 图标列表 ——
     const group = new Adw.PreferencesGroup({
