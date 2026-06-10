@@ -1,9 +1,9 @@
 {
   "uuid": "tray-collapse@fnidore.top",
   "name": "Tray Collapse 托盘折叠",
-  "description": "把 AppIndicator 托盘图标收进顶栏的下拉抽屉（像 Windows 的溢出区 ▲），避免图标越堆越多挤掉时钟。可在设置里逐个选择哪些图标收纳、哪些常驻顶栏。",
+  "description": "Collapse AppIndicator tray icons into an expandable drawer in the top bar (like the Windows overflow area), so a crowded tray no longer squeezes the clock. Per-icon collapse/pin settings, adjustable icon spacing, automatic dedup of unstable icon ids. Requires the AppIndicator extension.\n\n把 AppIndicator 托盘图标收进顶栏的可展开抽屉（像 Windows 的溢出区），避免图标越堆越多挤掉时钟。支持逐个图标收纳/常驻、间距调节、不稳定 id 自动去重。需要 AppIndicator 扩展。",
   "shell-version": ["42"],
   "version": 1,
   "settings-schema": "org.gnome.shell.extensions.tray-collapse",
-  "url": "https://fnidore.top"
+  "url": "https://github.com/fnidore/tray-collapse"
 }
