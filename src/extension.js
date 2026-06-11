@@ -14,11 +14,12 @@
 //   设置界面在独立进程读不到 statusArea，故扩展把见过的图标写进
 //   gsettings 的 known-indicators(JSON) 供其渲染列表（跨进程桥接）。
 
-const { Clutter, GLib, GObject, St } = imports.gi;
+const { Clutter, Gio, GLib, GObject, St } = imports.gi;
 
 const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
 
 const APPINDICATOR_PREFIX = 'appindicator-';
 
@@ -58,11 +59,21 @@ class TrayCollapseButton extends PanelMenu.Button {
         this._settings = settings;
         this._expanded = false;
 
+        // 自带的胶囊 symbolic 图标（收起=闭合胶囊，展开=向左开口）；
+        // 文件名以 -symbolic.svg 结尾，Shell 会按主题前景色重新着色
+        this._iconCollapsed = Gio.icon_new_for_string(
+            `${Me.path}/icons/tray-collapse-symbolic.svg`);
+        this._iconExpanded = Gio.icon_new_for_string(
+            `${Me.path}/icons/tray-expand-symbolic.svg`);
+
         this._icon = new St.Icon({
-            icon_name: 'view-more-symbolic',
+            gicon: this._iconCollapsed,
             style_class: 'system-status-icon',
         });
         this.add_child(this._icon);
+
+        // 悬停柔光 / 打开时下划线常亮的样式钩子（保留 panel-button 的面板度量）
+        this.add_style_class_name('tray-collapse-button');
 
         // 抽屉盒子：放进顶栏（由 Extension.enable 插入 _rightBox），靠显隐折叠
         this._drawerBox = new St.BoxLayout({
@@ -130,8 +141,13 @@ class TrayCollapseButton extends PanelMenu.Button {
     _toggle() {
         this._expanded = !this._expanded;
         this._drawerBox.visible = this._expanded;
-        this._icon.icon_name = this._expanded
-            ? 'pan-start-symbolic' : 'view-more-symbolic';
+        this._icon.gicon = this._expanded
+            ? this._iconExpanded : this._iconCollapsed;
+        // 抽屉打开期间按钮保持「激活」态（stylesheet 里的 :checked 下划线）
+        if (this._expanded)
+            this.add_style_pseudo_class('checked');
+        else
+            this.remove_style_pseudo_class('checked');
     }
 
     // 当前所有 appindicator：[{indicator, id, title, container}]

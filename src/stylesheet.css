@@ -1,4 +1,36 @@
+/* 顶栏胶囊按钮的悬停 / 激活态。
+ * symbolic 图标由 Shell 按前景色重新着色，这里只管按钮背景与图标提亮。 */
+.tray-collapse-button {
+    border-radius: 7px;
+    transition-duration: 120ms;
+}
+
+/* 悬停：柔光药丸 + 图标提亮 */
+.tray-collapse-button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.tray-collapse-button:hover StIcon,
+.tray-collapse-button:focus StIcon {
+    color: #ffffff;
+}
+
+/* 激活：抽屉打开期间常亮（JS 里 toggle 'checked' 伪类），Yaru 橙下划线 */
+.tray-collapse-button:checked,
+.tray-collapse-button:active {
+    background-color: transparent;
+    box-shadow: inset 0 -2px 0 #e95420;
+}
+.tray-collapse-button:checked StIcon,
+.tray-collapse-button:active StIcon {
+    color: #ffffff;
+}
+
+/* 备选激活风格（想换就替换上面两条 :checked 规则）：
+   中性提亮: background-color: rgba(255,255,255,0.16);
+   橙色填充: background-color: rgba(233,84,32,0.20);  StIcon { color: #e95420; } */
+
 /* 抽屉里图标之间留点间距，别挤成一坨 */
 .tray-collapse-drawer {
     padding: 4px 10px;
+    transition-duration: 200ms;
 }
