@@ -129,11 +129,12 @@ make pack deb     # 验证 zip / deb 打包
 ## 发布
 
 推一个 `v*` 标签即触发 GitHub Actions 自动打包 zip + deb 并创建 Release。
-deb 的版本号取自 `metadata.json` 的 `version`，发版前先把它 +1 再打标签，两边保持一致：
+deb 的版本号取自 `metadata.json` 的 `version`，发版前先更新为下一个未使用的版本号，再打同名标签。更新说明写入 `release-notes/vN.md`（`N` 为版本号），发布流程会读取该文件并上传 zip、deb：
 
 ```bash
-# 1. metadata.json: "version": N+1
-git tag v3 && git push origin v3
+# 1. metadata.json: "version": N
+# 2. 准备 release-notes/vN.md，并提交版本与说明
+git tag vN && git push origin vN
 ```
 
 上架 [extensions.gnome.org](https://extensions.gnome.org)：`make pack` 后到
