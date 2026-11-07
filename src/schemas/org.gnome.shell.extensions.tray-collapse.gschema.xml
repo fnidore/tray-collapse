@@ -24,7 +24,7 @@
     <key name="known-indicators" type="s">
       <default>'[]'</default>
       <summary>已知图标记录 (JSON)</summary>
-      <description>由扩展进程写入：见过的所有图标 [{id,title}]，供设置界面渲染列表（跨进程桥接）。</description>
+      <description>由扩展进程写入：见过的所有图标 [{id,title,peers}]，peers 保存曾同时在线的同名图标 id，供设置界面渲染列表及去重保护（跨进程桥接）。</description>
     </key>
 
     <key name="drawer-spacing" type="i">

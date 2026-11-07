@@ -16,7 +16,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 安装打包依赖
-        run: sudo apt-get update && sudo apt-get install -y libglib2.0-bin zip
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-bin zip gjs gir1.2-adw-1 xvfb dbus-x11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 离线回归与设置窗口检查
+        run: make check test-prefs
 
       - name: 打包 zip + deb
         run: make pack deb

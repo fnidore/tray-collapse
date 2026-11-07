@@ -2,8 +2,10 @@
 // 运行在独立进程，读不到 Shell 的 statusArea，
 // 因此图标列表来自扩展进程写入的 gsettings: known-indicators(JSON)。
 
-const { Adw, Gio, Gtk } = imports.gi;
+const { Adw, Gio, GLib, Gtk } = imports.gi;
 const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const { readKnownIndicators } = Me.imports.indicatorSettings;
 
 function init() {}
 
@@ -16,9 +18,8 @@ function makeSpinRow(settings, key, title, subtitle, lower, upper) {
         }),
         valign: Gtk.Align.CENTER,
     });
-    spin.set_value(settings.get_int(key));
-    spin.connect('value-changed',
-        () => settings.set_int(key, spin.get_value_as_int()));
+    // 双向绑定也能接收窗口外修改的数值。
+    settings.bind(key, spin, 'value', Gio.SettingsBindFlags.DEFAULT);
     row.add_suffix(spin);
     row.activatable_widget = spin;
     return row;
@@ -41,8 +42,14 @@ function setCollapsed(settings, id, collapse) {
         collapsed.push(id);
     else
         pinned.push(id);
-    settings.set_strv('collapsed-ids', collapsed);
-    settings.set_strv('pinned-ids', pinned);
+    // 先写目标列表，减少切换时落入默认状态的中间过程。
+    if (collapse) {
+        settings.set_strv('collapsed-ids', collapsed);
+        settings.set_strv('pinned-ids', pinned);
+    } else {
+        settings.set_strv('pinned-ids', pinned);
+        settings.set_strv('collapsed-ids', collapsed);
+    }
 }
 
 function fillPreferencesWindow(window) {
@@ -76,7 +83,7 @@ function fillPreferencesWindow(window) {
     page.add(spacing);
 
     spacing.add(makeSpinRow(settings, 'drawer-spacing',
-        '抽屉图标间距', '⋯ 展开后，抽屉里各图标之间的距离', 0, 40));
+        '抽屉图标间距', '展开后，抽屉里各图标之间的距离', 0, 40));
 
     spacing.add(makeSpinRow(settings, 'panel-hpadding',
         '顶栏图标内边距', '每个托盘图标左右的留白，调小即收紧间距（主题默认 12）',
@@ -85,39 +92,78 @@ function fillPreferencesWindow(window) {
     // —— 图标列表 ——
     const group = new Adw.PreferencesGroup({
         title: '托盘图标',
-        description: '开 = 收进抽屉，关 = 留在顶栏（修改「默认」后请重开本窗口刷新状态）',
+        description: '开 = 收进抽屉，关 = 留在顶栏；新图标和设置变化会自动刷新',
     });
     page.add(group);
 
-    let known = [];
-    try {
-        known = JSON.parse(settings.get_string('known-indicators')) || [];
-    } catch (e) {
-        known = [];
+    let rows = [];
+    let switches = [];
+    let syncing = false;
+
+    function syncSwitches() {
+        // 程序同步开关时不写回配置，避免把默认值固化成用户的明确选择。
+        syncing = true;
+        try {
+            for (const { id, widget } of switches)
+                widget.active = isCollapsed(settings, id);
+        } finally {
+            syncing = false;
+        }
     }
 
-    if (known.length === 0) {
-        group.add(new Adw.ActionRow({
-            title: '还没发现任何托盘图标',
-            subtitle: '启用扩展后，让各程序的托盘图标出现一次即会自动记录，再回来设置',
-        }));
-        return;
+    function rebuildRows() {
+        for (const row of rows)
+            group.remove(row);
+        rows = [];
+        switches = [];
+
+        const known = readKnownIndicators(settings);
+        known.sort((a, b) => a.title.localeCompare(b.title));
+        if (known.length === 0) {
+            const row = new Adw.ActionRow({
+                title: '还没发现任何托盘图标',
+                subtitle: '启用扩展后，让程序的托盘图标出现一次，本列表会自动更新',
+            });
+            group.add(row);
+            rows.push(row);
+            return;
+        }
+
+        for (const entry of known) {
+            // 应用标题来自外部进程，转义后才能交给 Adw 的 Pango 标记解析。
+            const row = new Adw.ActionRow({
+                title: GLib.markup_escape_text(entry.title, -1),
+                subtitle: GLib.markup_escape_text(entry.id, -1),
+            });
+            const widget = new Gtk.Switch({
+                active: isCollapsed(settings, entry.id),
+                valign: Gtk.Align.CENTER,
+            });
+            widget.connect('notify::active', () => {
+                if (!syncing)
+                    setCollapsed(settings, entry.id, widget.active);
+            });
+            row.add_suffix(widget);
+            row.activatable_widget = widget;
+            group.add(row);
+            rows.push(row);
+            switches.push({ id: entry.id, widget });
+        }
     }
 
-    known.sort((a, b) => (a.title || a.id).localeCompare(b.title || b.id));
-    for (const k of known) {
-        const row = new Adw.ActionRow({
-            title: k.title || k.id,
-            subtitle: k.id,
-        });
-        const sw = new Gtk.Switch({
-            active: isCollapsed(settings, k.id),
-            valign: Gtk.Align.CENTER,
-        });
-        sw.connect('notify::active',
-            () => setCollapsed(settings, k.id, sw.active));
-        row.add_suffix(sw);
-        row.activatable_widget = sw;
-        group.add(row);
-    }
+    rebuildRows();
+    const signalIds = [
+        settings.connect('changed::known-indicators', rebuildRows),
+        settings.connect('changed::default-collapse', syncSwitches),
+        settings.connect('changed::collapsed-ids', syncSwitches),
+        settings.connect('changed::pinned-ids', syncSwitches),
+    ];
+
+    // 窗口关闭后断开手动连接，避免后台刷新已经关闭的控件。
+    window.connect('close-request', () => {
+        for (const id of signalIds)
+            settings.disconnect(id);
+        signalIds.length = 0;
+        return false;
+    });
 }
