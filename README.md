@@ -2,6 +2,25 @@
 
 一个 GNOME Shell **42** 扩展：把右上角的 AppIndicator 托盘图标折叠进一个顶栏内可展开的区域（类似 Windows 的溢出区），并支持**逐个图标**选择「收纳 / 常驻」，解决图标越堆越多挤掉时钟的问题。
 
+**当前版本：[v4 · 角色选择与一体式收放动画](https://github.com/fnidore/tray-collapse/releases/tag/v4)**
+
+[下载 zip](https://github.com/fnidore/tray-collapse/releases/download/v4/tray-collapse%40fnidore.top.shell-extension.zip) · [下载 deb](https://github.com/fnidore/tray-collapse/releases/download/v4/gnome-shell-extension-tray-collapse_4_all.deb) · [查看更新说明](release-notes/v4.md)
+
+## 角色与动画
+
+![四位可选角色与收放表情](docs/design/character-lineup.png)
+
+| 角色 | 外观 |
+| --- | --- |
+| 樱桃 · 元气少女（默认） | 粉色短发、星形发卡 |
+| 月白 · 银发猫耳 | 银白短发、蓝色眼睛、藏蓝蝴蝶结 |
+| 薄荷 · 森林精灵 | 薄荷绿发、精灵耳、叶片发饰与侧辫 |
+| 琥珀 · 狐耳少女 | 暖橘卷发、蓬松狐耳、红色蝴蝶结 |
+
+每位角色都有两种表情，预览图左侧为「收好」，右侧为「弹出」。展开时眨眼轻抬，将图标向左送出；收起时闭眼点头，将图标收回。四位角色共用这两套动作。
+
+在设置的「角色外观」点击角色整行即可切换并自动保存，无需重载桌面。切换角色会保留当前收放状态、正在进行的动画以及原有托盘配置。
+
 ## 功能
 
 - 顶栏使用**一体式 Q 版少女按钮**：26px 彩色透明底头像，闭眼微笑表示已收好，眨眼表示已弹出；不再额外放置方向箭头
@@ -40,10 +59,6 @@ tray-collapse/
 
 ## 安装
 
-![四位可选角色与收放表情](docs/design/character-lineup.png)
-
-打开扩展设置，在「角色外观」点击樱桃、月白、薄荷或琥珀即可切换，选择会自动保存；左图为收好，右图为弹出。
-
 ### 方式一：Release zip（推荐）
 
 从 [Releases](https://github.com/fnidore/tray-collapse/releases) 下载 zip：
@@ -77,6 +92,17 @@ gnome-extensions prefs  tray-collapse@fnidore.top   # 打开设置
 依赖：GNOME Shell 42 + [AppIndicator 扩展](https://github.com/ubuntu/gnome-shell-extension-appindicator)（Ubuntu 22.04 预装）。
 
 源码安装和卸载脚本只替换或移除软链接。若目标位置已是普通目录，脚本会拒绝覆盖或删除；请先备份，再使用对应的扩展管理器或软件包管理器处理原安装。
+
+## 使用与升级
+
+1. 打开设置：运行 `gnome-extensions prefs tray-collapse@fnidore.top`，或在项目目录执行 `make prefs`。
+2. 在「角色外观」选中喜欢的角色，即时生效，重新登录后也会保留。
+3. 在托盘图标列表中，打开开关表示「收纳」，关闭表示「留在顶栏」。展开后仍可直接点击原生图标打开各应用菜单。
+4. 点击顶栏角色展开或收起。角色按钮获得焦点后，可用 Enter / 空格切换、Esc 收起；关闭系统动画时直接切换表情和状态。
+
+**已有用户升级：**沿用原安装方式，zip 使用 `gnome-extensions install --force`，deb 使用 `sudo apt install ./gnome-shell-extension-tray-collapse_4_all.deb`。源码软链安装则在项目目录执行 `git pull --ff-only` 和 `make schemas`。更新文件后，在 X11 下按 `Alt+F2` → 输入 `r` → 回车，让运行中的 Shell 重新加载扩展。原来的收纳、常驻、间距与角色选择无需重新设置。
+
+用户目录的 zip / 源码安装与系统目录的 deb 安装使用同一扩展 UUID；用户目录版本优先加载。升级时请沿用当前方式，避免安装了新系统包却仍加载用户目录的旧版本。可用 `gnome-extensions info tray-collapse@fnidore.top` 核对实际加载路径、版本和启用状态。
 
 ## 工作原理
 
@@ -132,6 +158,8 @@ make pack deb     # 验证 zip / deb 打包
 ```
 
 测试使用临时安装目录、内存 GSettings 和隔离显示，不修改当前桌面的托盘配置。逻辑回归使用面板替身，不能替代真实 Shell 中的菜单点击、主题布局和扩展冲突验证。GitHub Actions 在推送、PR 和发布前运行上述回归与设置窗口检查。
+
+v4 发布时的 24 项逻辑回归、隔离安装/卸载和真实 GTK4/Adw 设置窗口检查已通过，发布后的 zip / deb 下载内容也已与源码逐文件核对。2026-11-09 在 GNOME Shell 42.9 / X11 桌面重新加载 v4 后，逐一验证了四位角色即时切换、展开与收起动画；动画采样期间右侧系统图标位置保持不变，扩展错误列表为空。其他 GNOME 版本、Wayland 及不同扩展组合仍需另行验证。
 
 ## 发布
 
