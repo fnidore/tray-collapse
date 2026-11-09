@@ -6,6 +6,7 @@ const { Adw, Gio, GLib, Gtk } = imports.gi;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 const { readKnownIndicators } = Me.imports.indicatorSettings;
+const { CHARACTERS } = Me.imports.characters;
 
 function init() {}
 
@@ -74,6 +75,51 @@ function fillPreferencesWindow(window) {
     defaultRow.add_suffix(defaultSwitch);
     defaultRow.activatable_widget = defaultSwitch;
     general.add(defaultRow);
+
+    // 两种表情并排预览，整行可点击；单选状态直接保存为角色设置。
+    const characters = new Adw.PreferencesGroup({
+        title: '角色外观',
+        description: '点击选择，立即切换并记住；左图为收好，右图为弹出',
+    });
+    page.add(characters);
+    const characterButtons = [];
+    let firstCharacterButton = null;
+    for (const character of CHARACTERS) {
+        const row = new Adw.ActionRow({
+            title: character.name,
+            subtitle: character.description,
+        });
+        const previews = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER });
+        for (const icon of [character.collapsedIcon, character.expandedIcon]) {
+            previews.append(new Gtk.Image({
+                gicon: Gio.icon_new_for_string(`${Me.path}/${icon}`),
+                pixel_size: 36,
+            }));
+        }
+        row.add_prefix(previews);
+
+        const choice = new Gtk.CheckButton({ valign: Gtk.Align.CENTER });
+        if (firstCharacterButton)
+            choice.set_group(firstCharacterButton);
+        else
+            firstCharacterButton = choice;
+        choice.active = settings.get_string('character-id') === character.id;
+        choice.connect('toggled', () => {
+            if (choice.active && settings.get_string('character-id') !== character.id)
+                settings.set_string('character-id', character.id);
+        });
+        row.add_suffix(choice);
+        row.activatable_widget = choice;
+        characters.add(row);
+        characterButtons.push({ id: character.id, widget: choice });
+    }
+
+    function syncCharacters() {
+        // 外部修改设置时只同步单选状态，toggled 中的相等检查阻止重复写入。
+        const selected = settings.get_string('character-id');
+        for (const { id, widget } of characterButtons)
+            widget.active = id === selected;
+    }
 
     // —— 间距 ——
     const spacing = new Adw.PreferencesGroup({
@@ -153,6 +199,7 @@ function fillPreferencesWindow(window) {
 
     rebuildRows();
     const signalIds = [
+        settings.connect('changed::character-id', syncCharacters),
         settings.connect('changed::known-indicators', rebuildRows),
         settings.connect('changed::default-collapse', syncSwitches),
         settings.connect('changed::collapsed-ids', syncSwitches),

@@ -3,6 +3,18 @@
   <schema id="org.gnome.shell.extensions.tray-collapse"
           path="/org/gnome/shell/extensions/tray-collapse/">
 
+    <key name="character-id" type="s">
+      <default>'sakura'</default>
+      <choices>
+        <choice value="sakura"/>
+        <choice value="luna"/>
+        <choice value="mint"/>
+        <choice value="amber"/>
+      </choices>
+      <summary>顶栏角色</summary>
+      <description>选择顶栏显示的角色，立即切换并保存；每个角色都有收好和弹出两种表情。</description>
+    </key>
+
     <key name="default-collapse" type="b">
       <default>false</default>
       <summary>新图标默认收进抽屉</summary>

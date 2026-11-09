@@ -1,0 +1,7 @@
+Generator: built-in image_gen (imagegen skill), not CLI/API fallback
+Transparent background: true
+Runtime asset: src/icons/anime-girl.png (128px thumbnail, displayed at 26px)
+Character: original chibi anime mascot, pink bob hair and cream star hair clip
+
+Final prompt:
+Use case: stylized-concept. Asset type: a transparent PNG mascot head used as a tiny 26-pixel GNOME desktop tray button. Create one ORIGINAL cute anime adult-woman chibi head icon, facing forward, with a warm friendly smile, pale pastel pink bob hair, a simple tiny cream star hair clip, large clear dark plum eyes and a small peach blush. Head only: no shoulders or body. Extremely simplified flat cel shading and bold clean dark plum outlines, a few broad color regions, cream face, no intricate strands or ornament. It must remain readable when reduced to 26 by 26 pixels on both dark and light desktop panels. Square composition, head centered and filling about 90 percent of the canvas, entirely uncut including hair. Single character and single head only. Genuinely transparent background with alpha; no filled background, no circular badge, no box, no border around the canvas, no shadows outside the character, no text, no letters, no logo, no watermark, no UI mockup, no arrows. Polished tasteful compact Japanese-anime mascot sticker, wholesome and expressive.

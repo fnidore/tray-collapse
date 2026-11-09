@@ -1,0 +1,11 @@
+Generator: built-in image_gen (imagegen skill), not CLI/API fallback
+Reference: original pink-haired girl from anime-girl-prompt.txt
+Transparent background: true
+Runtime assets: src/icons/anime-girl-collapsed.png and src/icons/anime-girl-expanded.png
+Both assets: 128px PNG thumbnails, displayed at 26px
+
+Collapsed expression prompt:
+Edit target: the supplied transparent chibi anime girl head. Change ONLY the facial expression to a peaceful contented smile with BOTH eyes closed as two clean curved eyelash lines, and a small softly closed smiling mouth. This is the RESTING/COLLECTED state of a 26-pixel desktop tray mascot after she has tucked away the icons. Preserve the original adult-woman chibi identity, pink bob hairstyle silhouette, cream star hair clip, exact hair placement and overall head proportions, bold dark plum outlines, color palette, blush, original centered square framing and head scale. Keep the head perfectly upright. Head only, no body, no hands, no tray, no props or extra stars, no arrows, no text, no border, no badge, no ground shadow. Preserve genuine transparent alpha background. Clear simple anime expression readable at 26 pixels; do not redesign the character or change the outer silhouette.
+
+Expanded expression prompt:
+Edit target: the supplied transparent chibi anime girl head. Change ONLY the facial expression to an energetic playful wink: the viewer's LEFT eye is closed in a clear curved wink, the viewer's RIGHT eye remains the original large sparkling plum eye, and her mouth has a cheerful small open smile. This is the OPEN/POPPING-OUT state of a 26-pixel desktop tray mascot as she presents the icons. Preserve the original adult-woman chibi identity, pink bob hairstyle silhouette, cream star hair clip, exact hair placement and overall head proportions, bold dark plum outlines, color palette, blush, original centered square framing and head scale. Keep the head perfectly upright. Head only, no body, no hands, no tray, no props or extra stars, no arrows, no text, no border, no badge, no ground shadow. Preserve genuine transparent alpha background. Clear simple anime expression readable at 26 pixels; do not redesign the character or change the outer silhouette.

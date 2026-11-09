@@ -17,7 +17,10 @@ const fillPreferencesWindow = loadPrefs({
     misc: {
         extensionUtils: {
             getSettings: () => settings,
-            getCurrentExtension: () => ({ imports: { indicatorSettings: imports.indicatorSettings } }),
+            getCurrentExtension: () => ({
+                path: sourceDir,
+                imports: { indicatorSettings: imports.indicatorSettings, characters: imports.characters },
+            }),
         },
     },
 });
@@ -46,6 +49,17 @@ Adw.init();
 const window = new Adw.PreferencesWindow();
 fillPreferencesWindow(window);
 check(row(window, '还没发现任何托盘图标'), '初始空状态未展示');
+
+// 四个角色可在同一窗口直接选择，外部修改也会同步选中状态。
+const characterRows = ['樱桃 · 元气少女', '月白 · 银发猫耳', '薄荷 · 森林精灵', '琥珀 · 狐耳少女'];
+for (const title of characterRows)
+    check(row(window, title), `缺少角色预览：${title}`);
+check(row(window, characterRows[0]).activatable_widget.active, '默认角色未选中');
+row(window, characterRows[2]).activatable_widget.active = true;
+check(settings.get_string('character-id') === 'mint', '角色选择未保存');
+settings.set_string('character-id', 'luna');
+check(row(window, characterRows[1]).activatable_widget.active, '外部角色变化未同步');
+check(!row(window, characterRows[2]).activatable_widget.active, '角色未保持单选');
 
 // 新图标到来后不重开窗口；特殊字符仍能作为普通标题展示。
 settings.set_string('known-indicators', JSON.stringify([{ id: 'app&1', title: '<Proxy> & Test' }]));

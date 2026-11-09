@@ -4,7 +4,7 @@
 // 设计要点（为什么不用弹出菜单）：
 //   被收纳的图标本身是面板按钮（PanelMenu.Button），如果塞进弹出菜单里，
 //   点击它会先关闭外层菜单，导致图标自己的菜单弹不出来。
-//   抽屉里的图标仍是原生面板按钮，动画只改变裁剪区域和透明度：
+//   抽屉里的图标仍是原生面板按钮，动画只改变裁剪、透明度和绘制位移：
 //     - 收起：动画结束后隐藏外层，不占顶栏空间；
 //     - 展开：从按钮向左展开，内容保持原尺寸，菜单仍由原生按钮处理。
 //
@@ -21,6 +21,7 @@ const PanelMenu = imports.ui.panelMenu;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 const { canonicalId, readKnownIndicators } = Me.imports.indicatorSettings;
+const { getCharacter } = Me.imports.characters;
 
 const APPINDICATOR_PREFIX = 'appindicator-';
 
@@ -131,20 +132,16 @@ class TrayCollapseButton extends PanelMenu.Button {
         super._init(0.0, '展开托盘图标', true);
         this._settings = settings;
         this._expanded = false;
+        this._motionSerial = 0;
 
-        // 左箭头表示向时钟方向展开，右箭头表示收回；颜色跟随主题。
-        this._iconCollapsed = Gio.icon_new_for_string(
-            `${Me.path}/icons/tray-collapse-symbolic.svg`);
-        this._iconExpanded = Gio.icon_new_for_string(
-            `${Me.path}/icons/tray-expand-symbolic.svg`);
-
-        // 单个方向箭头保留 22px 尺寸，让可见高度接近旁边的托盘图标。
-        this._icon = new St.Icon({
-            gicon: this._iconCollapsed,
-            icon_size: 22,
-            style_class: 'system-status-icon',
+        // 两种表情使用相同画布，动作只改变绘制变换，不改变按钮布局尺寸。
+        this._avatar = new St.Icon({
+            icon_size: 26,
+            style_class: 'tray-collapse-avatar',
         });
-        this.add_child(this._icon);
+        this._avatar.set_pivot_point(0.5, 0.5);
+        this._applyCharacter();
+        this.add_child(this._avatar);
 
         // 直接使用原生面板按钮，保留图标两侧的完整点击区域。
         this.add_style_class_name('tray-collapse-button');
@@ -170,6 +167,7 @@ class TrayCollapseButton extends PanelMenu.Button {
         ];
 
         this._settingsIds = [
+            this._settings.connect('changed::character-id', () => this._applyCharacter()),
             this._settings.connect('changed::collapsed-ids', () => this._apply()),
             this._settings.connect('changed::pinned-ids', () => this._apply()),
             this._settings.connect('changed::default-collapse', () => this._apply()),
@@ -223,6 +221,15 @@ class TrayCollapseButton extends PanelMenu.Button {
         return this._drawer;
     }
 
+    _applyCharacter() {
+        const character = getCharacter(this._settings.get_string('character-id'));
+        this._avatarCollapsed = Gio.icon_new_for_string(`${Me.path}/${character.collapsedIcon}`);
+        this._avatarExpanded = Gio.icon_new_for_string(`${Me.path}/${character.expandedIcon}`);
+
+        // 只换表情素材，不重启动画、不改变收放状态或托盘选择。
+        this._avatar.gicon = this._expanded ? this._avatarExpanded : this._avatarCollapsed;
+    }
+
     _applyDrawerSpacing() {
         const px = this._settings.get_int('drawer-spacing');
         for (const spacer of this._spacers.values())
@@ -253,46 +260,112 @@ class TrayCollapseButton extends PanelMenu.Button {
 
     _toggle() {
         this._expanded = !this._expanded;
-        this._icon.gicon = this._expanded
-            ? this._iconExpanded : this._iconCollapsed;
+        const serial = ++this._motionSerial;
+        this._avatar.gicon = this._expanded
+            ? this._avatarExpanded : this._avatarCollapsed;
         // 读屏名称说明当前可执行的动作，不要求用户辨认图形方向。
         this.accessible_name = this._expanded ? '收起托盘图标' : '展开托盘图标';
-        // 保留打开状态的样式钩子，当前主题以箭头方向区分展开与收起。
+        // 保留打开状态的样式钩子，当前主题由少女表情区分两种状态。
         if (this._expanded)
             this.add_style_pseudo_class('checked');
         else
             this.remove_style_pseudo_class('checked');
-        this._animateDrawer();
+        this._animateAvatar(serial);
+        this._animateDrawer(serial);
     }
 
-    _animateDrawer() {
+    _animateAvatar(serial) {
+        const avatar = this._avatar;
+        avatar.remove_all_transitions();
+        if (!St.Settings.get().enable_animations) {
+            avatar.scale_x = 1;
+            avatar.scale_y = 1;
+            avatar.translation_y = 0;
+            avatar.rotation_angle_z = 0;
+            return;
+        }
+
+        // 弹出：眨眼、轻抬并朝抽屉方向倾身，再缓和回到自然姿态。
+        if (this._expanded) {
+            avatar.ease({
+                scale_x: 1.06,
+                scale_y: 1.10,
+                translation_y: -1.5,
+                rotation_angle_z: -8,
+                duration: 90,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => this._settleAvatar(serial, 230),
+            });
+            return;
+        }
+
+        // 收入：闭眼、轻压点头，用不同于弹出的方向与节奏收好图标。
+        avatar.ease({
+            scale_x: 1.06,
+            scale_y: 0.86,
+            translation_y: 1.5,
+            rotation_angle_z: 6,
+            duration: 120,
+            mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
+            onComplete: () => this._settleAvatar(serial, 180),
+        });
+    }
+
+    _settleAvatar(serial, duration) {
+        // 快速点击或禁用会使旧动作失效，不让旧回调覆盖新的表情动作。
+        if (serial !== this._motionSerial)
+            return;
+        this._avatar.ease({
+            scale_x: 1,
+            scale_y: 1,
+            translation_y: 0,
+            rotation_angle_z: 0,
+            duration,
+            mode: Clutter.AnimationMode.EASE_OUT_SINE,
+        });
+    }
+
+    _animateDrawer(serial) {
         const drawer = this._drawer;
         const expanded = this._expanded;
         // 连续点击从当前进度反向运行，取消旧动画后不再执行它的完成回调。
         drawer.remove_all_transitions();
+        this._drawerBox.remove_all_transitions();
 
         // 遵循桌面的动画开关；空抽屉直接切换，不做无内容的过渡。
         if (!St.Settings.get().enable_animations || this._moved.size === 0) {
             drawer.reveal = expanded ? 1 : 0;
             drawer.opacity = expanded ? 255 : 0;
             drawer.visible = expanded;
+            this._drawerBox.translation_x = 0;
             return;
         }
 
+        // 弹出从少女身旁向左送出；收入则向少女靠回，位移不参与面板排版。
+        if (expanded && !drawer.visible)
+            this._drawerBox.translation_x = 12;
         drawer.visible = true;
-        const duration = expanded ? 220 : 160;
+        const duration = expanded ? 300 : 220;
         const mode = expanded
             ? Clutter.AnimationMode.EASE_OUT_CUBIC
             : Clutter.AnimationMode.EASE_IN_CUBIC;
         drawer.ease_property('reveal', expanded ? 1 : 0, { duration, mode });
+        this._drawerBox.ease({
+            translation_x: expanded ? 0 : 12,
+            duration,
+            mode,
+        });
         drawer.ease({
             opacity: expanded ? 255 : 0,
             duration,
             mode,
             onComplete: () => {
                 // 收起过渡结束后才隐藏，确保顶栏最终不再为抽屉留空。
-                if (this._expanded === expanded)
-                    drawer.visible = expanded;
+                if (serial !== this._motionSerial)
+                    return;
+                drawer.visible = expanded;
+                if (!expanded)
+                    this._drawerBox.translation_x = 0;
             },
         });
     }
@@ -546,6 +619,9 @@ class TrayCollapseButton extends PanelMenu.Button {
 
     destroy() {
         // 先取消动画回调，再还原图标，避免禁用后仍访问抽屉。
+        this._motionSerial++;
+        this._avatar.remove_all_transitions();
+        this._drawerBox.remove_all_transitions();
         this._drawer.remove_all_transitions();
         for (const [box, id] of this._addedIds)
             box.disconnect(id);

@@ -26,6 +26,7 @@ check:          ## 离线回归、脚本语法与 schema 校验；不修改桌�
 	node --check src/extension.js
 	node --check src/prefs.js
 	node --check src/indicatorSettings.js
+	node --check src/characters.js
 	node --test tests/*.test.cjs
 	bash -n install.sh uninstall.sh tests/install.test.sh
 	bash tests/install.test.sh

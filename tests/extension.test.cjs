@@ -39,6 +39,11 @@ class Actor extends Signals {
         this.destroyed = false;
         this.visible = props.visible ?? true;
         this.opacity = 255;
+        this.scale_x = 1;
+        this.scale_y = 1;
+        this.translation_x = 0;
+        this.translation_y = 0;
+        this.rotation_angle_z = 0;
         this.transitions = new Map();
     }
 
@@ -52,21 +57,36 @@ class Actor extends Signals {
     allocate(box) { this.allocation = box; }
     get_preferred_width() { return [40, 100]; }
     get_preferred_height() { return [24, 24]; }
+    set_pivot_point(x, y) { this.pivot = { x, y }; }
     remove_all_transitions() { this.transitions.clear(); }
     ease_property(property, target, params) {
         this.transitions.set(property, { target, ...params });
     }
     ease(params) {
-        this.transitions.set('opacity', { target: params.opacity, ...params });
+        let first = true;
+        for (const [property, target] of Object.entries(params)) {
+            if (['duration', 'mode', 'onComplete'].includes(property))
+                continue;
+            this.transitions.set(property, {
+                target,
+                duration: params.duration,
+                mode: params.mode,
+                onComplete: first ? params.onComplete : undefined,
+            });
+            first = false;
+        }
     }
     finishAnimations() {
         const transitions = [...this.transitions];
         this.transitions.clear();
+        const callbacks = [];
         for (const [property, transition] of transitions) {
             this[property] = transition.target;
             if (transition.onComplete)
-                transition.onComplete();
+                callbacks.push(transition.onComplete);
         }
+        for (const callback of callbacks)
+            callback();
     }
 
     get_parent() { return this.parent; }
@@ -119,6 +139,7 @@ class Settings extends Signals {
     constructor(values = {}) {
         super();
         this.values = {
+            'character-id': 'sakura',
             'known-indicators': '[]',
             'collapsed-ids': [],
             'pinned-ids': [],
@@ -158,6 +179,8 @@ function fixture(values = {}) {
     const sourceDir = path.resolve(__dirname, '../src');
     const shared = vm.createContext({ log() {}, logError() {} });
     vm.runInContext(fs.readFileSync(`${sourceDir}/indicatorSettings.js`, 'utf8'), shared);
+    const characters = vm.createContext({});
+    vm.runInContext(fs.readFileSync(`${sourceDir}/characters.js`, 'utf8'), characters);
     const context = vm.createContext({
         imports: {
             gi: {
@@ -169,7 +192,13 @@ function fixture(values = {}) {
                     EVENT_STOP: true,
                     EVENT_PROPAGATE: false,
                     ActorBox: class {},
-                    AnimationMode: { EASE_OUT_CUBIC: 1, EASE_IN_CUBIC: 2 },
+                    AnimationMode: {
+                        EASE_OUT_CUBIC: 1,
+                        EASE_IN_CUBIC: 2,
+                        EASE_OUT_QUAD: 3,
+                        EASE_IN_OUT_QUAD: 4,
+                        EASE_OUT_SINE: 5,
+                    },
                 },
                 Gio: { icon_new_for_string: value => value },
                 GLib: {
@@ -204,7 +233,7 @@ function fixture(values = {}) {
                 extensionUtils: {
                     getCurrentExtension: () => ({
                         path: sourceDir,
-                        imports: { indicatorSettings: shared },
+                        imports: { indicatorSettings: shared, characters },
                     }),
                 },
             },
@@ -419,14 +448,14 @@ test('展开和收起分别动画，收起结束后才隐藏并释放宽度', ()
     button._toggle();
     assert.equal(drawer.visible, true);
     assert.equal(drawer.transitions.get('reveal').target, 1);
-    assert.equal(drawer.transitions.get('reveal').duration, 220);
+    assert.equal(drawer.transitions.get('reveal').duration, 300);
     drawer.finishAnimations();
     assert.equal(drawer.reveal, 1);
     assert.equal(drawer.opacity, 255);
 
     button._toggle();
     assert.equal(drawer.visible, true);
-    assert.equal(drawer.transitions.get('reveal').duration, 160);
+    assert.equal(drawer.transitions.get('reveal').duration, 220);
     drawer.finishAnimations();
     assert.equal(drawer.visible, false);
     assert.equal(drawer.reveal, 0);
@@ -502,4 +531,117 @@ test('动画中程序退出后可完成收起，禁用时取消动画并还原�
     assert.equal(drawer.transitions.size, 0);
     assert.equal(drawer.destroyed, true);
     assert.equal(remaining.container.parent, panel._rightBox);
+});
+
+test('一体按钮由少女表情表示状态，减少动画时直接切换并保持自然姿态', () => {
+    const { button } = fixture();
+    assert.deepEqual(button.get_children(), [button._avatar]);
+    assert.ok(button._avatar.gicon.endsWith('/anime-girl-collapsed.png'));
+    button._toggle();
+    assert.ok(button._avatar.gicon.endsWith('/anime-girl-expanded.png'));
+    assert.equal(button._avatar.transitions.size, 0);
+    button._toggle();
+    assert.ok(button._avatar.gicon.endsWith('/anime-girl-collapsed.png'));
+    assert.equal(button._avatar.scale_x, 1);
+    assert.equal(button._avatar.scale_y, 1);
+    assert.equal(button._avatar.translation_y, 0);
+    assert.equal(button._avatar.rotation_angle_z, 0);
+});
+
+test('弹出轻抬眨眼，收入点头闭眼，两套动作结束后都复位且不请求重新布局', () => {
+    const { add, button, animationSettings } = fixture({ 'default-collapse': true });
+    add('app');
+    button._apply();
+    animationSettings.enable_animations = true;
+    const avatar = button._avatar;
+    button._toggle();
+    assert.equal(avatar.transitions.get('rotation_angle_z').target, -8);
+    assert.equal(avatar.transitions.get('scale_y').target, 1.10);
+    assert.equal(button.drawerBox.translation_x, 12);
+    assert.equal(button.drawerBox.transitions.get('translation_x').target, 0);
+    avatar.finishAnimations();
+    avatar.finishAnimations();
+    button.drawerBox.finishAnimations();
+    button.drawerActor.finishAnimations();
+    assert.equal(avatar.rotation_angle_z, 0);
+    assert.equal(avatar.translation_y, 0);
+    assert.equal(avatar.scale_y, 1);
+
+    button._toggle();
+    assert.equal(avatar.transitions.get('rotation_angle_z').target, 6);
+    assert.equal(avatar.transitions.get('scale_y').target, 0.86);
+    assert.equal(button.drawerBox.transitions.get('translation_x').target, 12);
+    avatar.finishAnimations();
+    avatar.finishAnimations();
+    button.drawerBox.finishAnimations();
+    button.drawerActor.finishAnimations();
+    assert.equal(avatar.rotation_angle_z, 0);
+    assert.equal(avatar.translation_y, 0);
+    assert.equal(avatar.scale_y, 1);
+    assert.equal(button.drawerBox.translation_x, 0);
+    assert.equal(button.drawerActor.visible, false);
+    assert.equal(avatar.layoutRequests || 0, 0);
+    assert.equal(button.drawerBox.layoutRequests || 0, 0);
+});
+
+test('快速切换和禁用使旧表情回调失效，所有关联动画都被清理', () => {
+    const { add, button, animationSettings } = fixture({ 'default-collapse': true });
+    add('app');
+    button._apply();
+    animationSettings.enable_animations = true;
+    button._toggle();
+    const avatar = button._avatar;
+    const content = button.drawerBox;
+    const drawer = button.drawerActor;
+    const oldCallback = [...avatar.transitions.values()].find(value => value.onComplete).onComplete;
+    button._toggle();
+    oldCallback();
+    assert.equal(avatar.transitions.get('rotation_angle_z').target, 6);
+    const closingCallback = [...avatar.transitions.values()].find(value => value.onComplete).onComplete;
+    button.destroy();
+    assert.doesNotThrow(closingCallback);
+    assert.equal(avatar.transitions.size, 0);
+    assert.equal(content.transitions.size, 0);
+    assert.equal(drawer.transitions.size, 0);
+});
+
+test('启动时读取已保存角色，切换时保留当前收放状态和托盘选择', () => {
+    const { button, settings } = fixture({
+        'character-id': 'mint',
+        'collapsed-ids': ['saved-collapse'],
+        'pinned-ids': ['saved-pin'],
+    });
+    assert.ok(button._avatar.gicon.endsWith('/characters/mint-collapsed.png'));
+    settings.set_string('character-id', 'luna');
+    assert.ok(button._avatar.gicon.endsWith('/characters/luna-collapsed.png'));
+    button._toggle();
+    settings.set_string('character-id', 'amber');
+    assert.equal(button._expanded, true);
+    assert.ok(button._avatar.gicon.endsWith('/characters/amber-expanded.png'));
+    assert.equal(button._avatar.icon_size, 26);
+    assert.deepEqual(settings.get_strv('collapsed-ids'), ['saved-collapse']);
+    assert.deepEqual(settings.get_strv('pinned-ids'), ['saved-pin']);
+});
+
+test('动画中选择新角色不会重启动画或丢失进度，结束后新表情保持正确', () => {
+    const { add, button, settings, animationSettings } = fixture({ 'default-collapse': true });
+    add('app');
+    button._apply();
+    animationSettings.enable_animations = true;
+    button._toggle();
+    button.drawerActor.reveal = 0.4;
+    const serial = button._motionSerial;
+    settings.set_string('character-id', 'mint');
+    assert.equal(button._motionSerial, serial);
+    assert.equal(button.drawerActor.reveal, 0.4);
+    assert.equal(button.drawerActor.transitions.get('reveal').target, 1);
+    button._avatar.finishAnimations();
+    button._avatar.finishAnimations();
+    button.drawerBox.finishAnimations();
+    button.drawerActor.finishAnimations();
+    assert.ok(button._avatar.gicon.endsWith('/characters/mint-expanded.png'));
+    assert.equal(button._avatar.scale_y, 1);
+    assert.equal(button.drawerActor.reveal, 1);
+    button._toggle();
+    assert.ok(button._avatar.gicon.endsWith('/characters/mint-collapsed.png'));
 });

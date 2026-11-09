@@ -1,4 +1,4 @@
-/* 常态只显示箭头，不叠加主题的激活底色或装饰线。 */
+/* 少女本身就是按钮，不另放箭头、底座或装饰线。 */
 .tray-collapse-button,
 .tray-collapse-button:checked {
     -natural-hpadding: 8px;
@@ -17,6 +17,11 @@
 
 .tray-collapse-button:active {
     background-color: rgba(128, 128, 128, 0.28);
+}
+
+/* 两种表情保留原配色，状态变化由表情与动作体现。 */
+.tray-collapse-avatar {
+    -st-icon-style: regular;
 }
 
 /* 抽屉不另画底座，展开后的图标保持原生顶栏外观。 */
