@@ -6,6 +6,12 @@
 
 [下载 zip](https://github.com/fnidore/tray-collapse/releases/download/v4/tray-collapse%40fnidore.top.shell-extension.zip) · [下载 deb](https://github.com/fnidore/tray-collapse/releases/download/v4/gnome-shell-extension-tray-collapse_4_all.deb) · [查看更新说明](release-notes/v4.md)
 
+## 桌面演示
+
+![实际桌面录屏：四位角色切换与展开、收起动画](docs/demo/desktop-demo.gif)
+
+GNOME Shell 42.9 / X11 实际桌面录屏，按原速依次展示樱桃、月白、薄荷和琥珀的即时切换与收放动作。画面仅截取顶栏托盘区域，角色名和动作提示位于截图外。
+
 ## 角色与动画
 
 ![四位可选角色与收放表情](docs/design/character-lineup.png)
@@ -161,20 +167,7 @@ make pack deb     # 验证 zip / deb 打包
 
 v4 发布时的 24 项逻辑回归、隔离安装/卸载和真实 GTK4/Adw 设置窗口检查已通过，发布后的 zip / deb 下载内容也已与源码逐文件核对。2026-11-09 在 GNOME Shell 42.9 / X11 桌面重新加载 v4 后，逐一验证了四位角色即时切换、展开与收起动画；动画采样期间右侧系统图标位置保持不变，扩展错误列表为空。其他 GNOME 版本、Wayland 及不同扩展组合仍需另行验证。
 
-## 发布
-
-推一个 `v*` 标签即触发 GitHub Actions 自动打包 zip + deb 并创建 Release。
-deb 的版本号取自 `metadata.json` 的 `version`，发版前先更新为下一个未使用的版本号，再打同名标签。更新说明写入 `release-notes/vN.md`（`N` 为版本号），发布流程会读取该文件并上传 zip、deb：
-
-```bash
-# 1. metadata.json: "version": N
-# 2. 准备 release-notes/vN.md，并提交版本与说明
-git tag vN && git push origin vN
-```
-
-上架 [extensions.gnome.org](https://extensions.gnome.org)：`make pack` 后到
-[上传页](https://extensions.gnome.org/upload/) 提交 zip，等待人工审核。
-每次重新上传同样需要 `version` 加一。
+维护者发布流程见 [发布指南](docs/RELEASING.md)。
 
 ## 许可证
 
